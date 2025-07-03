@@ -1,0 +1,60 @@
+name: Test Integration Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseFolderPath:
+        description: 'Base folder path for diffs'
+        required: true
+        default: 'diffs'
+      dynamicCoordinates:
+        description: 'Array of booleans for dynamic coordinates (e.g., [true, false])'
+        required: true
+        default: '[true, false]'
+      doHarvest:
+        description: "Do harvest and verify completion"
+        required: false
+        default: 'true'
+  push:
+    branches:
+      - qt/test # Or any other branch you want to trigger the workflow on
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        dynamicCoordinates: ${{ fromJson(github.event.inputs.dynamicCoordinates || '[false]') }}
+    defaults:
+      run:
+        working-directory: ./tools/integration
+    steps:
+      - uses: actions/checkout@v4.1.1
+
+      - uses: actions/setup-node@v4.0.1
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: './tools/integration/'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests on tools
+        run: npm test
+
+      - name: Check whether to run integration tests
+        if: ${{ github.event_name == 'push' && github.repository != 'clearlydefined/operations' }}
+        run: |
+          echo "Repository: ${{ github.repository }}, Event: ${{ github.event_name }}"
+          echo "Running scheduled integration tests only on clearlydefined/operations."
+          exit 1
+
+      - name: Print event name and repository
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Repository: ${{ github.repository }}"
